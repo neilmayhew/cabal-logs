@@ -32,14 +32,9 @@ executable test-failures
     Parse
 
   build-depends:
-    aeson,
     base,
-    containers,
-    data-default,
     filepath,
-    microlens,
     optparse-applicative,
     regex-applicative,
     terminal-size,
     text,
-    yaml,

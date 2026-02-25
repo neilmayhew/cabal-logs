@@ -1,17 +1,13 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Parse (parseLog) where
 
 import Control.Exception (evaluate)
-import Data.Aeson (ToJSON (..))
-import Data.Default (Default (..))
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import GHC.Generics (Generic)
 import LogResult
 import System.FilePath (splitDirectories)
 import Text.Regex.Applicative
@@ -25,49 +21,47 @@ parseLog fp = do
   let package = case reverse (splitDirectories fp) of
         (_ : "test" : p : _) -> T.pack p
         _ -> "unknown-package"
-  evaluate $ mkLogResult package (collectSuites infos)
+  evaluate $ LogResult package (collectSuites infos)
 
 collectSuites :: [LogInfo] -> [SuiteRun]
 collectSuites = finalize . foldr go mempty
   where
     go :: LogInfo -> ([ReproInfo], [SuiteRun]) -> ([ReproInfo], [SuiteRun])
-    go (SuiteName n) (infs, suites) = ([], mkSuiteRun' n infs `cons` suites)
+    go (SuiteName _) ([], suites) = ([], suites)
+    go (SuiteName n) (infs, suites) = ([], mkSuiteRun n infs `cons` suites)
     go (ReproInfo inf) (infs, suites) = (inf `cons` infs, suites)
     finalize :: ([ReproInfo], [SuiteRun]) -> [SuiteRun]
     finalize ([], suites) = suites
-    finalize (infs, suites) = mkSuiteRun' "unknown-suite" infs `cons` suites
-    mkSuiteRun' :: Text -> [ReproInfo] -> SuiteRun
-    mkSuiteRun' n = mkSuiteRun n . collectFailures
+    finalize (infs, suites) = mkSuiteRun "unknown-suite" infs `cons` suites
+    mkSuiteRun :: Text -> [ReproInfo] -> SuiteRun
+    mkSuiteRun n = SuiteRun n . collectFailures
 
 collectFailures :: [ReproInfo] -> [Failure]
 collectFailures = go
   where
     go (Seed seed : Selector sel : infs) =
-      mkFailure sel seed `cons` go infs
+      Failure sel seed `cons` go infs
     go (Selector sel : Seed seed : infs) =
-      mkFailure sel seed `cons` go infs
+      Failure sel seed `cons` go infs
     go (SelectorAndSeed sel seed : infs) =
-      mkFailure sel seed `cons` go infs
+      Failure sel seed `cons` go infs
     go (Selector sel : infs) =
-      mkFailure sel def `cons` go infs
+      Failure sel def `cons` go infs
     go (Seed seed : infs) =
-      mkFailure def seed `cons` go infs
+      Failure def seed `cons` go infs
     go [] = []
+    def = Option "" ""
 
 data LogInfo
   = SuiteName !Text
   | ReproInfo !ReproInfo
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Show)
 
 data ReproInfo
   = Selector !Option
   | Seed !Option
   | SelectorAndSeed !Option !Option
-  deriving (Eq, Ord, Show, Generic)
-
-instance ToJSON LogInfo
-
-instance ToJSON ReproInfo
+  deriving (Eq, Ord, Show)
 
 findInfo :: Text -> Maybe LogInfo
 findInfo = fmap fst . findLongestPrefixWithUncons T.uncons (few anySym *> logInfo)

@@ -1,6 +1,5 @@
-{ mkDerivation, aeson, base, bytestring, containers, data-default
-, filepath, lib, microlens, optparse-applicative
-, regex-applicative-text, terminal-size, text, unliftio, yaml
+{ mkDerivation, base, filepath, lib, optparse-applicative
+, regex-applicative, terminal-size, text
 }:
 mkDerivation {
   pname = "cabal-logs";
@@ -9,9 +8,8 @@ mkDerivation {
   isLibrary = false;
   isExecutable = true;
   executableHaskellDepends = [
-    aeson base bytestring containers data-default filepath microlens
-    optparse-applicative regex-applicative-text terminal-size text
-    unliftio yaml
+    base filepath optparse-applicative regex-applicative terminal-size
+    text
   ];
   description = "Utilities for examining Cabal logs";
   license = lib.licensesSpdx."Apache-2.0";

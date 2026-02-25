@@ -1,28 +1,22 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 import Control.Monad (unless)
 import Data.Foldable (for_)
 import Data.List (sort)
-import Data.Map (Map)
-import qualified Data.Map as Map
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Traversable (for)
-import qualified Data.Yaml as Yaml
-import Lens.Micro (SimpleGetter, (%~), (^.))
-import Lens.Micro.Extras (view)
 import LogResult
 import Options.Applicative hiding (Failure)
 import Parse
 import qualified System.Console.Terminal.Size as TS
-import System.IO (hPutStrLn, stderr)
+import System.IO (IOMode (WriteMode), hPutStrLn, stderr, withFile)
 
 data Options = Options
   { optVerbosity :: Int
-  , optOutput :: Maybe FilePath
+  , optOutput :: FilePath
   , optLogFiles :: [FilePath]
   }
   deriving (Show)
@@ -45,11 +39,13 @@ main = do
                     <> short 'v'
                     <> long "verbose"
               optOutput <-
-                optional . strOption $
-                  help "Write YAML output to FILE for further analysis"
+                strOption $
+                  help "Write output to FILE"
                     <> short 'o'
                     <> long "output"
                     <> metavar "FILE"
+                    <> value "/dev/stdout"
+                    <> showDefaultWith id
               optLogFiles <-
                 strArguments $
                   help "Read the failures from FILE ..."
@@ -61,35 +57,27 @@ main = do
 
   let
     trace n = if optVerbosity >= n then hPutStrLn stderr else const mempty
-    nonEmptySuite = not . null . view suiteFailures
-    nonEmptyLog = not . null . view logSuites
-    forceSpine xs = foldr (\_ acc -> acc) () xs `seq` xs
+    removeEmptyLogs = filter $ not . null . logSuites
 
   logResults <-
-    fmap (forceSpine . filter nonEmptyLog . map (logSuites %~ filter nonEmptySuite)) $
+    fmap removeEmptyLogs $
       for optLogFiles $ \file -> do
         trace 1 $ "Examining " <> file
         parseLog file
 
   trace 1 $ show (length logResults) <> " logs with failures found"
 
-  case optOutput of
-    Just output -> do
-      let
-        options = Nothing `Yaml.setWidth` Yaml.defaultFormatOptions `Yaml.setFormat` Yaml.defaultEncodeOptions
-        toMap :: Ord k => SimpleGetter s k -> SimpleGetter s v -> [s] -> Map k v
-        toMap k v = Map.fromList . map (\s -> (s ^. k, s ^. v))
-        toMaps = fmap (toMap suiteName suiteFailures) . toMap logPackage logSuites
-      Yaml.encodeFileWith options output $ toMaps logResults
-    Nothing -> do
-      unless (null (logResults :: [LogResult])) $ do
-        T.putStrLn "## Test Failures ##"
-        T.putStrLn ""
-        T.putStrLn "| Target | Seed | Pattern |"
-        T.putStrLn "|:------ |:---- |:------- |"
-      for_ (sort logResults) $ \lr -> do
-        for_ (sort $ lr ^. logSuites) $ \sr -> do
-          let target = lr ^. logPackage <> ":test:" <> sr ^. suiteName
-          for_ (sr ^. suiteFailures) $ \f -> do
-            T.putStrLn . T.unwords $
-              ["|", target, "|", f ^. failureSeed . optionValue, "|", f ^. failureSelector . optionValue, "|"]
+  withFile optOutput WriteMode $ \h -> do
+    unless (null logResults) $ do
+      T.hPutStr h . T.unlines $
+        [ "## Test Failures ##"
+        , ""
+        , "| Target | Seed | Pattern |"
+        , "|:------ |:---- |:------- |"
+        ]
+    for_ (sort logResults) $ \lr -> do
+      for_ (sort $ logSuites lr) $ \sr -> do
+        let target = logPackage lr <> ":test:" <> suiteName sr
+        for_ (suiteFailures sr) $ \f -> do
+          T.hPutStrLn h . T.unwords $
+            ["|", target, "|", optionValue (failureSeed f), "|", optionValue (failureSelector f), "|"]
