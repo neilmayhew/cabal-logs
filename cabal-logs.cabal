@@ -33,6 +33,9 @@ executable test-failures
 
   build-depends:
     base,
+    cabal-plan,
+    containers,
+    directory,
     filepath,
     optparse-applicative,
     regex-applicative,
