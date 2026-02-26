@@ -24,9 +24,9 @@ common rts
     -rtsopts
     -with-rtsopts=-N
 
-executable test-failures
+executable extract-failures
   import: language, warnings, rts
-  main-is: test-failures.hs
+  main-is: extract-failures.hs
   other-modules:
     LogResults
     Parse
@@ -34,12 +34,25 @@ executable test-failures
   build-depends:
     aeson,
     base,
-    bytestring,
     cabal-plan,
     containers,
     directory,
     filepath,
     optparse-applicative,
     regex-applicative,
+    terminal-size,
+    text,
+
+executable render-failures
+  import: language, warnings, rts
+  main-is: render-failures.hs
+  other-modules:
+    LogResults
+
+  build-depends:
+    aeson,
+    base,
+    containers,
+    optparse-applicative,
     terminal-size,
     text,
