@@ -6,8 +6,8 @@ module Parse (parseLog) where
 import Control.Exception (evaluate)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import Data.Text qualified as T
+import Data.Text.IO qualified as T
 import LogResults
 import Text.Regex.Applicative
 

@@ -4,16 +4,16 @@
 
 import Cabal.Plan
 import Control.Monad (guard, unless)
-import qualified Data.Aeson as JSON
-import qualified Data.ByteString.Lazy.Char8 as BSL
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import Data.Aeson qualified as JSON
+import Data.ByteString.Lazy.Char8 qualified as BSL
+import Data.Map.Strict qualified as Map
+import Data.Text qualified as T
+import Data.Text.IO qualified as T
 import Data.Traversable (for)
 import LogResults
 import Options.Applicative hiding (Failure)
 import Parse
-import qualified System.Console.Terminal.Size as TS
+import System.Console.Terminal.Size qualified as TS
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Exit (die)
 import System.FilePath ((<.>), (</>))
