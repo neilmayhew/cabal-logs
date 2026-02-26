@@ -4,14 +4,13 @@
 
 import Cabal.Plan
 import Control.Monad (guard, unless)
-import Data.Bool (bool)
-import Data.Foldable (for_)
-import Data.List (sort)
+import qualified Data.Aeson as JSON
+import qualified Data.ByteString.Lazy.Char8 as BSL
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Traversable (for)
-import LogResult
+import LogResults
 import Options.Applicative hiding (Failure)
 import Parse
 import qualified System.Console.Terminal.Size as TS
@@ -24,6 +23,7 @@ data Options = Options
   { optVerbosity :: Int
   , optProjectDir :: FilePath
   , optOutput :: FilePath
+  , optOutputJson :: Bool
   }
   deriving (Show)
 
@@ -59,14 +59,21 @@ main = do
                     <> metavar "FILE"
                     <> value "/dev/stdout"
                     <> showDefaultWith id
+              optOutputJson <-
+                switch $
+                  help "Write output as JSON"
+                    <> short 'j'
+                    <> long "json"
               pure Options {..}
           )
           (fullDesc <> header "Extract failure information from Cabal test logs")
       )
 
+  let trace n = if optVerbosity >= n then hPutStrLn stderr else const mempty
+
   -- Avoid confusing behaviour from `findProjectRoot`
   doesDirectoryExist optProjectDir
-    >>= bool (die $ "Project directory " <> optProjectDir <> " doesn't exist") (pure ())
+    >>= (`unless` die ("Project directory " <> optProjectDir <> " doesn't exist"))
 
   root <-
     findProjectRoot optProjectDir
@@ -75,7 +82,7 @@ main = do
   plan <- findAndDecodePlanJson $ ProjectRelativeToDir root
 
   let
-    logs = do
+    targetLogs = do
       -- List monad
       unit <- Map.elems $ pjUnits plan
       guard $ uType unit == UnitTypeLocal
@@ -88,33 +95,45 @@ main = do
         target = name <> ":" <> dispCompNameTarget pName comp
         file = dir </> "test" </> T.unpack (dispPkgId pId <> "-" <> tName) <.> "log"
       pure (target, file)
-    trace n = if optVerbosity >= n then hPutStrLn stderr else const mempty
-    removeEmptyLogs = filter $ not . null . snd
 
-  logResults <-
-    fmap removeEmptyLogs $
-      for logs $ \(target, file) -> do
-        exists <- doesFileExist file
-        failures <-
-          if exists
-            then do
-              trace 1 $ "Examining " <> file
-              parseLog file
-            else
-              pure mempty
-        pure (target, failures)
+  trace 1 $ show (length targetLogs) <> " Cabal targets found"
 
-  trace 1 $ show (length logResults) <> " logs with failures found"
+  targetFailures <-
+    for targetLogs $ \(target, file) -> do
+      exists <- doesFileExist file
+      failures <-
+        if exists
+          then do
+            trace 2 $ "Examining " <> file
+            parseLog file
+          else
+            pure mempty
+      pure (target, failures)
+
+  let
+    logResults :: LogResults
+    logResults = Map.fromList $ filter (not . null . snd) targetFailures
+
+  trace 1 $ show (Map.size logResults) <> " logs with failures found"
 
   withFile optOutput WriteMode $ \h -> do
-    unless (null logResults) $ do
-      T.hPutStr h . T.unlines $
-        [ "## Test Failures ##"
-        , ""
-        , "| Target | Seed | Pattern |"
-        , "|:------ |:---- |:------- |"
-        ]
-    for_ (sort logResults) $ \(target, failures) -> do
-      for_ failures $ \f -> do
-        T.hPutStrLn h . T.unwords $
-          ["|", target, "|", optionValue (failureSeed f), "|", optionValue (failureSelector f), "|"]
+    if optOutputJson
+      then do
+        BSL.hPutStr h $ JSON.encode logResults
+      else do
+        unless (null logResults) $ do
+          let
+            prefix =
+              [ "## Test Failures ##"
+              , ""
+              , "| Target | Seed | Pattern |"
+              , "|:------ |:---- |:------- |"
+              ]
+            body =
+              [ T.unwords ["|", target, "|", seed, "|", selector, "|"]
+              | (target, failures) <- Map.toList logResults
+              , f <- failures
+              , let seed = optionValue (failureSeed f)
+              , let selector = optionValue (failureSelector f)
+              ]
+          T.hPutStr h . T.unlines $ prefix <> body

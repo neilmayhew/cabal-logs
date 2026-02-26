@@ -28,11 +28,13 @@ executable test-failures
   import: language, warnings, rts
   main-is: test-failures.hs
   other-modules:
-    LogResult
+    LogResults
     Parse
 
   build-depends:
+    aeson,
     base,
+    bytestring,
     cabal-plan,
     containers,
     directory,
