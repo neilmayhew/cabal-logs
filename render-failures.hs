@@ -3,11 +3,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-import Control.Monad (unless)
 import Data.Aeson qualified as JSON
 import Data.Either (partitionEithers)
 import Data.Foldable (for_)
-import Data.Map.Strict qualified as Map
+import Data.List (sort)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty qualified as NE
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
 import Data.Traversable (for)
@@ -53,20 +54,29 @@ main = do
   for_ errs $ hPutStrLn stderr
 
   let
-    selectorEntry Failure {..} = (optionValue failureSelector, [optionValue failureSeed])
-    logResults = Map.fromListWith (<>) . map selectorEntry <$> Map.unionsWith (<>) inputs
+    groupedFailures =
+      NE.groupWith fst . sort $
+        [ (suiteName, (optionValue failureSelector, logCompilerVersion, optionValue failureSeed))
+        | LogResults {..} <- inputs
+        , SuiteRun {..} <- logSuiteRuns
+        , Failure {..} <- suiteFailures
+        ]
 
-  unless (null logResults) $ do
-    let
-      prefix =
-        [ "## Test Failures ##"
-        , ""
-        , "| Target | Pattern | Seeds |"
-        , "|:------ |:------- |:----- |"
+  let
+    prefix = ["## Test Failures ##"]
+    body =
+      concat
+        [ [ ""
+          , "### `" <> suite <> "` ###"
+          , ""
+          , "| Test                                         | Compiler | Seed     |"
+          , "|:-------------------------------------------- |:-------- |:-------- |"
+          ]
+            <> [ T.unwords ["|", selector, "|", compilerName, "|", seed, "|"]
+               | (selector, compiler, seed) <- map snd $ NE.toList g
+               , let compilerName = T.intercalate "." $ map (T.pack . show) compiler
+               ]
+        | g@((suite, _) :| _) <- groupedFailures
         ]
-      body =
-        [ T.unwords ["|", target, "|", selector, "|", T.unwords seeds, "|"]
-        | (target, selectors) <- Map.toList logResults
-        , (selector, seeds) <- Map.toList selectors
-        ]
-    T.writeFile optOutput . T.unlines $ prefix <> body
+
+  T.writeFile optOutput . T.unlines $ prefix <> body

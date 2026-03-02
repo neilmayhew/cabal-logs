@@ -3,12 +3,12 @@
 module LogResults (
   Option (..),
   Failure (..),
-  LogResults,
+  SuiteRun (..),
+  LogResults (..),
 ) where
 
 import Data.Aeson
 import Data.List (stripPrefix)
-import Data.Map (Map)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
@@ -24,7 +24,17 @@ data Failure = Failure
   }
   deriving (Eq, Ord, Show, Generic)
 
-type LogResults = Map Text [Failure]
+data SuiteRun = SuiteRun
+  { suiteName :: !Text
+  , suiteFailures :: ![Failure]
+  }
+  deriving (Eq, Ord, Show, Generic)
+
+data LogResults = LogResults
+  { logCompilerVersion :: ![Int]
+  , logSuiteRuns :: ![SuiteRun]
+  }
+  deriving (Eq, Ord, Show, Generic)
 
 instance ToJSON Option where
   toJSON = genericToJSON $ defaultOptions {fieldLabelModifier = relabel "option"}
@@ -32,11 +42,23 @@ instance ToJSON Option where
 instance ToJSON Failure where
   toJSON = genericToJSON $ defaultOptions {fieldLabelModifier = relabel "failure"}
 
+instance ToJSON SuiteRun where
+  toJSON = genericToJSON $ defaultOptions {fieldLabelModifier = relabel "suite"}
+
+instance ToJSON LogResults where
+  toJSON = genericToJSON $ defaultOptions {fieldLabelModifier = relabel "log"}
+
 instance FromJSON Option where
   parseJSON = genericParseJSON $ defaultOptions {fieldLabelModifier = relabel "option"}
 
 instance FromJSON Failure where
   parseJSON = genericParseJSON $ defaultOptions {fieldLabelModifier = relabel "failure"}
+
+instance FromJSON SuiteRun where
+  parseJSON = genericParseJSON $ defaultOptions {fieldLabelModifier = relabel "suite"}
+
+instance FromJSON LogResults where
+  parseJSON = genericParseJSON $ defaultOptions {fieldLabelModifier = relabel "log"}
 
 relabel :: String -> String -> String
 relabel p f = maybe f (camelTo2 '_') $ stripPrefix p f

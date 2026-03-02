@@ -1,10 +1,9 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
 
 import Cabal.Plan
-import Control.Monad (guard, unless)
+import Control.Monad (filterM, guard, unless)
 import Data.Aeson qualified as JSON
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
@@ -72,10 +71,12 @@ main = do
     findProjectRoot optProjectDir
       >>= maybe (die $ "Can't find project root in " <> optProjectDir) pure
 
+  trace 2 $ "Examining " <> root
+
   plan <- findAndDecodePlanJson $ ProjectRelativeToDir root
 
-  let
-    targetLogs = do
+  suiteLogs <-
+    filterM (doesFileExist . snd) $ do
       -- List monad
       unit <- Map.elems $ pjUnits plan
       guard $ uType unit == UnitTypeLocal
@@ -85,26 +86,19 @@ main = do
         pId = uPId unit
         PkgId pName _ = pId
         PkgName name = pName
-        target = name <> ":" <> dispCompNameTarget pName comp
+        suite = name <> ":" <> dispCompNameTarget pName comp
         file = dir </> "test" </> T.unpack (dispPkgId pId <> "-" <> tName) <.> "log"
-      pure (target, file)
+      pure (suite, file)
 
-  trace 1 $ show (length targetLogs) <> " Cabal targets found"
+  trace 1 $ show (length suiteLogs) <> " logs found"
 
-  targetFailures <-
-    for targetLogs $ \(target, file) -> do
-      exists <- doesFileExist file
-      failures <-
-        if exists
-          then do
-            trace 2 $ "Examining " <> file
-            parseLog file
-          else
-            pure mempty
-      pure (target, failures)
+  logSuiteRuns <-
+    for suiteLogs $ \(suiteName, file) -> do
+      suiteFailures <- do
+        trace 2 $ "Examining " <> file
+        parseLog file
+      pure SuiteRun {..}
 
-  let logResults = Map.fromList $ filter (not . null . snd) targetFailures
+  let PkgId _ (Ver logCompilerVersion) = pjCompilerId plan
 
-  trace 1 $ show (Map.size logResults) <> " logs with failures found"
-
-  JSON.encodeFile @LogResults optOutput logResults
+  JSON.encodeFile optOutput LogResults {..}

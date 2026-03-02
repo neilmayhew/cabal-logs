@@ -52,7 +52,6 @@ executable render-failures
   build-depends:
     aeson,
     base,
-    containers,
     optparse-applicative,
     terminal-size,
     text,
