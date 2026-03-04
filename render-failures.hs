@@ -18,7 +18,8 @@ import System.Console.Terminal.Size qualified as TS
 import System.IO (hPutStrLn, stderr)
 
 data Options = Options
-  { optOutput :: FilePath
+  { optVerbosity :: Int
+  , optOutput :: FilePath
   , optInputs :: [FilePath]
   }
   deriving (Show)
@@ -27,11 +28,18 @@ main :: IO ()
 main = do
   cols <- maybe 100 TS.width <$> TS.size
 
+  let counter = fmap length . many . flag' ()
+
   Options {..} <-
     customExecParser
       (prefs $ columns cols)
       ( info
           ( helper <*> do
+              optVerbosity <-
+                counter $
+                  help "Increase output verbosity (repeatable)"
+                    <> short 'v'
+                    <> long "verbose"
               optOutput <-
                 strOption $
                   help "Write output to FILE"
@@ -49,7 +57,15 @@ main = do
           (fullDesc <> header "Render failure information from Cabal test logs")
       )
 
-  (errs, inputs) <- partitionEithers <$> for optInputs (JSON.eitherDecodeFileStrict @LogResults)
+  let trace n = if optVerbosity >= n then hPutStrLn stderr else const mempty
+
+  trace 1 $ show (length optInputs) <> " extracted failures files found"
+
+  (errs, inputs) <-
+    fmap partitionEithers $
+      for optInputs $ \input -> do
+        trace 2 $ "Examining " <> input
+        JSON.eitherDecodeFileStrict @LogResults input
 
   for_ errs $ hPutStrLn stderr
 
