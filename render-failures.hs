@@ -3,19 +3,20 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-import Data.Aeson qualified as JSON
 import Data.Either (partitionEithers)
 import Data.Foldable (for_)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty (..))
-import Data.List.NonEmpty qualified as NE
-import Data.Text qualified as T
-import Data.Text.IO qualified as T
 import Data.Traversable (for)
 import LogResults
 import Options.Applicative hiding (Failure)
-import System.Console.Terminal.Size qualified as TS
 import System.IO (hPutStrLn, stderr)
+
+import Data.Aeson qualified as JSON
+import Data.List.NonEmpty qualified as NE
+import Data.Text qualified as T
+import Data.Text.IO qualified as T
+import System.Console.Terminal.Size qualified as TS
 
 data Options = Options
   { optVerbosity :: Int

@@ -4,18 +4,19 @@
 
 import Cabal.Plan
 import Control.Monad (filterM, guard, unless)
-import Data.Aeson qualified as JSON
-import Data.Map.Strict qualified as Map
-import Data.Text qualified as T
 import Data.Traversable (for)
 import LogResults
 import Options.Applicative hiding (Failure)
 import Parse
-import System.Console.Terminal.Size qualified as TS
 import System.Directory (doesDirectoryExist, doesFileExist)
 import System.Exit (die)
 import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
+
+import Data.Aeson qualified as JSON
+import Data.Map.Strict qualified as Map
+import Data.Text qualified as T
+import System.Console.Terminal.Size qualified as TS
 
 data Options = Options
   { optVerbosity :: Int
